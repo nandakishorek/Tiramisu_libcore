@@ -1234,6 +1234,7 @@ static void Posix_munmap(JNIEnv* env, jobject, jlong address, jlong byteCount) {
 }
 
 static jobject Posix_open(JNIEnv* env, jobject, jstring javaPath, jint flags, jint mode) {
+    ALOGE("Kishore: POSIX open\n");
     ScopedUtfChars path(env, javaPath);
     if (path.c_str() == NULL) {
         return NULL;
@@ -1379,6 +1380,7 @@ static jint Posix_prctl(JNIEnv* env, jobject, jint option __unused, jlong arg2 _
 }
 
 static jint Posix_preadBytes(JNIEnv* env, jobject, jobject javaFd, jobject javaBytes, jint byteOffset, jint byteCount, jlong offset) {
+    ALOGE("Kishore: POSIX pread64\n");
     ScopedBytesRW bytes(env, javaBytes);
     if (bytes.get() == NULL) {
         return -1;
@@ -1387,6 +1389,7 @@ static jint Posix_preadBytes(JNIEnv* env, jobject, jobject javaFd, jobject javaB
 }
 
 static jint Posix_pwriteBytes(JNIEnv* env, jobject, jobject javaFd, jbyteArray javaBytes, jint byteOffset, jint byteCount, jlong offset) {
+    ALOGE("Kishore: POSIX pwrite64\n");
     ScopedBytesRO bytes(env, javaBytes);
     if (bytes.get() == NULL) {
         return -1;
@@ -1395,6 +1398,7 @@ static jint Posix_pwriteBytes(JNIEnv* env, jobject, jobject javaFd, jbyteArray j
 }
 
 static jint Posix_readBytes(JNIEnv* env, jobject, jobject javaFd, jobject javaBytes, jint byteOffset, jint byteCount) {
+    ALOGE("Kishore: POSIX read \n");
     ScopedBytesRW bytes(env, javaBytes);
     if (bytes.get() == NULL) {
         return -1;
@@ -1417,6 +1421,7 @@ static jstring Posix_readlink(JNIEnv* env, jobject, jstring javaPath) {
 }
 
 static jint Posix_readv(JNIEnv* env, jobject, jobject javaFd, jobjectArray buffers, jintArray offsets, jintArray byteCounts) {
+    ALOGE("Kishore: POSIX readv\n");
     IoVec<ScopedBytesRW> ioVec(env, env->GetArrayLength(buffers));
     if (!ioVec.init(buffers, offsets, byteCounts)) {
         return -1;
@@ -1837,6 +1842,7 @@ static jint Posix_waitpid(JNIEnv* env, jobject, jint pid, jobject javaStatus, ji
 }
 
 static jint Posix_writeBytes(JNIEnv* env, jobject, jobject javaFd, jbyteArray javaBytes, jint byteOffset, jint byteCount) {
+    ALOGE("Kishore: POSIX writeBytes");
     ScopedBytesRO bytes(env, javaBytes);
     if (bytes.get() == NULL) {
         return -1;
@@ -1845,11 +1851,24 @@ static jint Posix_writeBytes(JNIEnv* env, jobject, jobject javaFd, jbyteArray ja
 }
 
 static jint Posix_writev(JNIEnv* env, jobject, jobject javaFd, jobjectArray buffers, jintArray offsets, jintArray byteCounts) {
+    ALOGE("Kishore: POSIX writev");
     IoVec<ScopedBytesRO> ioVec(env, env->GetArrayLength(buffers));
     if (!ioVec.init(buffers, offsets, byteCounts)) {
         return -1;
     }
     return IO_FAILURE_RETRY(env, ssize_t, writev, javaFd, ioVec.get(), ioVec.size());
+}
+
+static jint Posix_initIncognitoNative(JNIEnv* env, jobject) {
+    ALOGE("Kishore: POSIX Incognito init");
+    env->GetVersion();
+    return 1;
+}
+
+static jint Posix_stopIncognitoNative(JNIEnv* env, jobject) {
+    ALOGE("Kishore: POSIX Incognito stop");
+    env->GetVersion();
+    return 1;
 }
 
 #define NATIVE_METHOD_OVERLOAD(className, functionName, signature, variant) \
@@ -1974,6 +1993,8 @@ static JNINativeMethod gMethods[] = {
     NATIVE_METHOD(Posix, waitpid, "(ILandroid/util/MutableInt;I)I"),
     NATIVE_METHOD(Posix, writeBytes, "(Ljava/io/FileDescriptor;Ljava/lang/Object;II)I"),
     NATIVE_METHOD(Posix, writev, "(Ljava/io/FileDescriptor;[Ljava/lang/Object;[I[I)I"),
+    NATIVE_METHOD(Posix, initIncognitoNative, "()I"),
+    NATIVE_METHOD(Posix, stopIncognitoNative, "()I"),
 };
 void register_libcore_io_Posix(JNIEnv* env) {
     jniRegisterNativeMethods(env, "libcore/io/Posix", gMethods, NELEM(gMethods));

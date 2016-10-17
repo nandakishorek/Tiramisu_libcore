@@ -42,7 +42,12 @@ import java.nio.ByteBuffer;
 import java.nio.NioUtils;
 
 public final class Posix implements Os {
-    Posix() { }
+    Posix() {
+	java.util.Random random = new java.util.Random(System.currentTimeMillis());
+	num = random.nextInt();
+    }
+
+    private int num;
 
     public native FileDescriptor accept(FileDescriptor fd, InetSocketAddress peerAddress) throws ErrnoException, SocketException;
     public native boolean access(String path, int mode) throws ErrnoException;
@@ -278,4 +283,18 @@ public final class Posix implements Os {
             buffer.position(bytesReadOrWritten + originalPosition);
         }
     }
+
+    @Override
+    public boolean initIncognitoMode(boolean flag) {
+	return (initIncognitoNative() > 0) ? true : false;
+    }
+
+    private native int initIncognitoNative();
+
+    @Override
+    public boolean stopIncognitoMode() {
+	return (stopIncognitoNative() > 0) ? true : false;
+    }
+
+    private native int stopIncognitoNative();
 }

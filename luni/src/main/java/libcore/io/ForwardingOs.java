@@ -174,4 +174,6 @@ public class ForwardingOs implements Os {
     public int write(FileDescriptor fd, ByteBuffer buffer) throws ErrnoException, InterruptedIOException { return os.write(fd, buffer); }
     public int write(FileDescriptor fd, byte[] bytes, int byteOffset, int byteCount) throws ErrnoException, InterruptedIOException { return os.write(fd, bytes, byteOffset, byteCount); }
     public int writev(FileDescriptor fd, Object[] buffers, int[] offsets, int[] byteCounts) throws ErrnoException, InterruptedIOException { return os.writev(fd, buffers, offsets, byteCounts); }
+    public boolean initIncognitoMode(boolean flag) { return os.initIncognitoMode(flag); }
+    public boolean stopIncognitoMode() { return os.stopIncognitoMode(); }
 }

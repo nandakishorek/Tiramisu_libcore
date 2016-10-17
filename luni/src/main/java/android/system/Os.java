@@ -563,4 +563,12 @@ public final class Os {
    * See <a href="http://man7.org/linux/man-pages/man2/writev.2.html">writev(2)</a>.
    */
   public static int writev(FileDescriptor fd, Object[] buffers, int[] offsets, int[] byteCounts) throws ErrnoException, InterruptedIOException { return Libcore.os.writev(fd, buffers, offsets, byteCounts); }
+
+  public static boolean initIncognito(boolean flag) {
+      return Libcore.os.initIncognitoMode(flag);
+  }
+
+  public static boolean stopIncognito() {
+      return Libcore.os.stopIncognitoMode();
+  }
 }
