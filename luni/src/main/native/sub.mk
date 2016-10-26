@@ -48,6 +48,7 @@ LOCAL_SRC_FILES := \
     libcore_icu_Transliterator.cpp \
     libcore_io_AsynchronousCloseMonitor.cpp \
     libcore_io_Memory.cpp \
+    incognito_io.cpp \
     libcore_io_Posix.cpp \
     org_apache_harmony_xml_ExpatParser.cpp \
     readlink.cpp \

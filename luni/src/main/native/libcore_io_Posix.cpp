@@ -30,6 +30,7 @@
 #include "ScopedPrimitiveArray.h"
 #include "ScopedUtfChars.h"
 #include "toStringArray.h"
+#include "incognito_io.h"
 
 #include <arpa/inet.h>
 #include <errno.h>
@@ -1855,12 +1856,14 @@ static jint Posix_writev(JNIEnv* env, jobject, jobject javaFd, jobjectArray buff
 static jint Posix_initIncognitoNative(JNIEnv* env, jobject) {
     ALOGE("Kishore: POSIX Incognito init");
     env->GetVersion();
-    return 1;
+	int rc = Incognito_io_init();
+    return (rc != 0)? -1 : 1;
 }
 
 static jint Posix_stopIncognitoNative(JNIEnv* env, jobject) {
     ALOGE("Kishore: POSIX Incognito stop");
     env->GetVersion();
+	Incognito_io_stop();
     return 1;
 }
 

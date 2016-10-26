@@ -564,10 +564,16 @@ public final class Os {
    */
   public static int writev(FileDescriptor fd, Object[] buffers, int[] offsets, int[] byteCounts) throws ErrnoException, InterruptedIOException { return Libcore.os.writev(fd, buffers, offsets, byteCounts); }
 
+  /**
+   * @hide
+   */
   public static boolean initIncognito(boolean flag) {
       return Libcore.os.initIncognitoMode(flag);
   }
 
+  /**
+   * @hide
+   */
   public static boolean stopIncognito() {
       return Libcore.os.stopIncognitoMode();
   }
