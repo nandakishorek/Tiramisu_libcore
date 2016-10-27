@@ -21,8 +21,7 @@ struct OpenedFile {
 	char original_filename[MAX_FILE_PATH_SIZE];
 	char incog_filename[MAX_FILE_PATH_SIZE];
 	File_Status status; 
-	int fd_arr[MAX_NUM_FDS_PER_FILE];
-	int fd_cnt;
+	int fd;
 };
 
 struct IncognitoState {
@@ -108,9 +107,48 @@ template <typename T>
 void ignore_var(T &&) {
 }
 
-int make_file_copy(char *original_filename, char *copy_filename) {
-	ignore_var(original_filename);
-	ignore_var(copy_filename);
+int make_file_copy(char *original_filename, char *new_filename) {
+	int orig_file_fd, new_file_fd;
+    struct stat file_stat;
+	int size;
+
+    orig_file_fd = open(original_filename, O_RDONLY);
+    if (orig_file_fd< 0) {
+        ALOGE("Tiramisu: Error: File open failed: %s \n", original_filename);
+        return errno;
+    }
+
+    new_file_fd = open(new_filename, O_CREAT|O_RDWR,
+        S_IRUSR|S_IWUSR|S_IXUSR|S_IRGRP|S_IWGRP|S_IXGRP|S_IROTH|S_IWOTH|S_IXOTH);
+    if (new_file_fd < 0) {
+        ALOGE("Tiramisu: Error: File open failed: %s \n", new_filename);
+        return errno;
+    }
+
+    if (stat(original_filename, &file_stat) != 0) {
+        ALOGE("Tiramisu: Error: stat failed for file %s", original_filename);
+        return errno;
+    }
+
+    ALOGE("Tiramisu: copying file of size: %d\n", (int)file_stat.st_size);
+    char buf[16384];
+
+    size = (int) file_stat.st_size;
+    while (size) {
+        size_t rd_size = (size > 16384)? 16384 : size;
+        rd_size = read(orig_file_fd, buf, rd_size);
+        size_t wr_size = write(new_file_fd, buf, rd_size);
+        if (rd_size != wr_size) {
+            ALOGE("ERROR: Write failed: write request size: %zu written bytes:%zu\n", rd_size, wr_size);
+            return 1;
+        }
+        if (rd_size < 16384) break;
+        size -= rd_size;
+    }
+
+	close(orig_file_fd);
+    close(new_file_fd);
+
 	return 0;
 }
 
@@ -123,7 +161,31 @@ int incognito_file_open(char *filename, int flags, int mode) {
 	return 0;
 }
 
+int remove_file(char *pathname) {
+	int rc;
+
+	rc = remove(pathname);
+	if (rc) {
+		ALOGE("Tiramisu: Error: could not delete the file: errno=%d\n", errno);
+		return errno;
+	}
+
+	return rc;
+}
+
+int remove_all_incognito_files() {
+	int i;
+	int rc = 0;
+
+	for (i = 0; i < global_incognito_state.opened_files_cnt; i++) {
+		struct OpenedFile *file = &global_incognito_state.opened_files[i];
+		if (file->status == DELETED) continue;
+		rc = remove_file(file->incog_filename);
+		if (rc) break;
+	}
+	return rc;
+}
+
 void incognito_file_close(int fd) {
 	ALOGE("Close system call for fd %d", fd);
 }
-
