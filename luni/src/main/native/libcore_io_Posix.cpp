@@ -73,6 +73,8 @@
         jstring NAME = env->NewStringUTF(EXP); \
         if (NAME == NULL) return NULL;
 
+extern bool incognito_mode;
+
 struct addrinfo_deleter {
     void operator()(addrinfo* p) const {
         if (p != NULL) { // bionic's freeaddrinfo(3) crashes when passed NULL.
@@ -668,6 +670,16 @@ static void Posix_chmod(JNIEnv* env, jobject, jstring javaPath, jint mode) {
     if (path.c_str() == NULL) {
         return;
     }
+
+	char incognito_file_path[4096];
+	ALOGE("Posix_chmod: %s", path.c_str());
+	memset(incognito_file_path, 0, 4096);
+	if(incognito_mode && 
+		lookup_filename(path.c_str(), incognito_file_path, 4096)) {
+    	throwIfMinusOne(env, "chmod", TEMP_FAILURE_RETRY(chmod(incognito_file_path, mode)));
+		return;
+	}
+
     throwIfMinusOne(env, "chmod", TEMP_FAILURE_RETRY(chmod(path.c_str(), mode)));
 }
 
@@ -676,6 +688,14 @@ static void Posix_chown(JNIEnv* env, jobject, jstring javaPath, jint uid, jint g
     if (path.c_str() == NULL) {
         return;
     }
+	char incognito_file_path[4096];
+	ALOGE("Posix_chmod: %s", path.c_str());
+	memset(incognito_file_path, 0, 4096);
+	if(incognito_mode && 
+		lookup_filename(path.c_str(), incognito_file_path, 4096)) {
+    	throwIfMinusOne(env, "chown", TEMP_FAILURE_RETRY(chown(incognito_file_path, uid, gid)));
+		return;
+	}
     throwIfMinusOne(env, "chown", TEMP_FAILURE_RETRY(chown(path.c_str(), uid, gid)));
 }
 
@@ -1239,6 +1259,24 @@ static jobject Posix_open(JNIEnv* env, jobject, jstring javaPath, jint flags, ji
     if (path.c_str() == NULL) {
         return NULL;
     }
+
+	if (incognito_mode) {
+		char incognito_file_path[4096];
+		int path_set = 0;
+		int add_entry = 0;
+
+		ALOGE("Posix_open: %s flags=0x%x mode=0x%x", path.c_str(), flags, mode);
+		memset(incognito_file_path, 0, 4096);
+		incognito_file_open(path.c_str(), flags, &path_set, incognito_file_path, 4096, &add_entry);
+		if (path_set) {
+    		int fd = throwIfMinusOne(env, "open", TEMP_FAILURE_RETRY(open(incognito_file_path, flags, mode)));
+			if (add_entry) {
+				add_file_entry(path.c_str(), incognito_file_path, VALID, fd);
+			}
+    		return fd != -1 ? jniCreateFileDescriptor(env, fd) : NULL;
+		}
+	}
+
     int fd = throwIfMinusOne(env, "open", TEMP_FAILURE_RETRY(open(path.c_str(), flags, mode)));
     return fd != -1 ? jniCreateFileDescriptor(env, fd) : NULL;
 }
