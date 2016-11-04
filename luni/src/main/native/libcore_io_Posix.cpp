@@ -1892,17 +1892,16 @@ static jint Posix_writev(JNIEnv* env, jobject, jobject javaFd, jobjectArray buff
 }
 
 static jint Posix_initIncognitoNative(JNIEnv* env, jobject) {
-    ALOGE("Kishore: POSIX Incognito init");
     env->GetVersion();
-	int rc = Incognito_io_init();
+    ALOGE("Tiramisu: POSIX Incognito init");
+    int rc = Incognito_io_init();
     return (rc != 0)? -1 : 1;
 }
 
-static jint Posix_stopIncognitoNative(JNIEnv* env, jobject) {
-    ALOGE("Kishore: POSIX Incognito stop");
+static void Posix_stopIncognitoNative(JNIEnv* env, jobject) {
     env->GetVersion();
-	Incognito_io_stop();
-    return 1;
+    ALOGE("Tiramisu: POSIX Incognito stop");
+    Incognito_io_stop();
 }
 
 #define NATIVE_METHOD_OVERLOAD(className, functionName, signature, variant) \
@@ -2028,7 +2027,7 @@ static JNINativeMethod gMethods[] = {
     NATIVE_METHOD(Posix, writeBytes, "(Ljava/io/FileDescriptor;Ljava/lang/Object;II)I"),
     NATIVE_METHOD(Posix, writev, "(Ljava/io/FileDescriptor;[Ljava/lang/Object;[I[I)I"),
     NATIVE_METHOD(Posix, initIncognitoNative, "()I"),
-    NATIVE_METHOD(Posix, stopIncognitoNative, "()I"),
+    NATIVE_METHOD(Posix, stopIncognitoNative, "()V"),
 };
 void register_libcore_io_Posix(JNIEnv* env) {
     jniRegisterNativeMethods(env, "libcore/io/Posix", gMethods, NELEM(gMethods));

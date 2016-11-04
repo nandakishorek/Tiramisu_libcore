@@ -292,9 +292,9 @@ public final class Posix implements Os {
     private native int initIncognitoNative();
 
     @Override
-    public boolean stopIncognitoMode() {
-	return (stopIncognitoNative() > 0) ? true : false;
+    public void stopIncognitoMode() {
+	stopIncognitoNative();
     }
 
-    private native int stopIncognitoNative();
+    private native void stopIncognitoNative();
 }

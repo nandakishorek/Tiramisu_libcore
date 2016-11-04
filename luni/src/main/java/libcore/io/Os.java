@@ -168,5 +168,5 @@ public interface Os {
     public int write(FileDescriptor fd, byte[] bytes, int byteOffset, int byteCount) throws ErrnoException, InterruptedIOException;
     public int writev(FileDescriptor fd, Object[] buffers, int[] offsets, int[] byteCounts) throws ErrnoException, InterruptedIOException;
     public boolean initIncognitoMode(boolean flag);
-    public boolean stopIncognitoMode();
+    public void stopIncognitoMode();
 }

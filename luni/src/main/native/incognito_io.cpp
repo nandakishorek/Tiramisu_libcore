@@ -64,7 +64,7 @@ int remove_all_incognito_files() {
 }
 
 int Incognito_io_init() {
-	// Check if the global incognito state is already inited for the process.
+    // Check if the global incognito state is already inited for the process.
     // If the state is inited, return.
 	if (incognito_mode) {
 		ALOGE("Tiramisu: Incognito session for the app exists, restart the app to start a new incognito session");
@@ -81,11 +81,10 @@ int Incognito_io_init() {
 	global_incognito_state.opened_files_cnt = 0;
 	incognito_mode = true;
 	ALOGE("Tiramisu: Incognito state init successful");
-	return 0;
+    return 0;
 }
 
 void Incognito_io_stop() {
-
 	if (!incognito_mode) {
 		ALOGE("Tiramisu: Error: Incognito_io_stop called without init\n"); 
 		return;

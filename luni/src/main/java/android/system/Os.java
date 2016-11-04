@@ -574,7 +574,7 @@ public final class Os {
   /**
    * @hide
    */
-  public static boolean stopIncognito() {
-      return Libcore.os.stopIncognitoMode();
+  public static void stopIncognito() {
+      Libcore.os.stopIncognitoMode();
   }
 }
