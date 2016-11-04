@@ -34,33 +34,31 @@ static struct IncognitoState global_incognito_state;
 static bool init_done = false;
 
 int Incognito_io_init() {
-	// Check if the global incognito state is already inited for the process.
+    // Check if the global incognito state is already inited for the process.
     // If the state is inited, return.
-	if (init_done) {
-		ALOGE("Tiramisu: Incognito session for the app exists, restart the app to start a new incognito session");
-		return 0;
-	}
-
-	// Allocate memory.
-	global_incognito_state.opened_files = (struct OpenedFile *)
-		calloc(MAX_FILES_PER_PROCESS, sizeof(struct OpenedFile));
-	if (global_incognito_state.opened_files == NULL) {
-		return ENOMEM;
-	}
-	global_incognito_state.total_files_cnt = MAX_FILES_PER_PROCESS;
-	global_incognito_state.opened_files_cnt = 0;
-	init_done = true;
-	ALOGE("Tiramisu: Incognito state init successful");
+    if (init_done) {
+	ALOGE("Tiramisu: Incognito session for the app exists, restart the app to start a new incognito session");
 	return 0;
+    }
+    // Allocate memory.
+    global_incognito_state.opened_files = (struct OpenedFile *)
+					  calloc(MAX_FILES_PER_PROCESS, sizeof(struct OpenedFile));
+    if (global_incognito_state.opened_files == NULL) {
+	return ENOMEM;
+    }
+    global_incognito_state.total_files_cnt = MAX_FILES_PER_PROCESS;
+    global_incognito_state.opened_files_cnt = 0;
+    init_done = true;
+    ALOGE("Tiramisu: Incognito state init successful");
+    return 0;
 }
 
 void Incognito_io_stop() {
-	free(global_incognito_state.opened_files);
-	global_incognito_state.total_files_cnt = 0;
-	global_incognito_state.opened_files_cnt = 0;
-	init_done = false;
-	ALOGE("Tiramisu: Incognito state deinit successful");
-	return;
+    free(global_incognito_state.opened_files);
+    global_incognito_state.total_files_cnt = 0;
+    global_incognito_state.opened_files_cnt = 0;
+    init_done = false;
+    ALOGE("Tiramisu: Incognito state deinit successful");
 }
 
 inline int get_new_filename(char *old_filename, char *new_filename,
