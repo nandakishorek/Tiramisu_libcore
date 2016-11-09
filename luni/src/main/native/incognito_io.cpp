@@ -8,13 +8,8 @@
 #include <fcntl.h>
 #include <string.h>
 #include <errno.h>
+#include <pthread.h>
 
-
-#define MAX_NUM_FDS_PER_FILE 32
-#define MAX_FILE_PATH_SIZE 4096
-#define MAX_FILENAME_SIZE 256
-#define MAX_DIRNAME_SIZE  3840
-#define MAX_FILES_PER_PROCESS 128
 
 struct OpenedFile {
 	char original_filename[MAX_FILE_PATH_SIZE];
@@ -32,6 +27,7 @@ struct IncognitoState {
 
 static struct IncognitoState global_incognito_state;
 bool incognito_mode = false;
+pthread_mutex_t global_lock=PTHREAD_MUTEX_INITIALIZER;
 
 int remove_file(char *pathname) {
 	int rc;
@@ -263,6 +259,7 @@ bool lookup_filename(const char *pathname, char *incognito_pathname,
 					 size_t incog_pathname_sz) {
 	int i;
 
+	pthread_mutex_lock(&global_lock);
 	for (i = 0; i < global_incognito_state.opened_files_cnt; i++) {
 		struct OpenedFile *file = &global_incognito_state.opened_files[i];
 		if (strcmp(file->original_filename, pathname) == 0) {
@@ -275,14 +272,17 @@ bool lookup_filename(const char *pathname, char *incognito_pathname,
 			return true;
 		}
 	}
+	pthread_mutex_unlock(&global_lock);
 
 	return false;
 }
 
 int add_file_entry(const char *original_filename, const char *new_filename,
 				   File_Status status, int fd) {
+	pthread_mutex_lock(&global_lock);
 	if (global_incognito_state.opened_files_cnt == global_incognito_state.total_files_cnt) {
 		ALOGE("Tiramisu: Incognito table is full\n");
+		pthread_mutex_unlock(&global_lock);
 		return ENOMEM;
 	}
 
@@ -292,6 +292,7 @@ int add_file_entry(const char *original_filename, const char *new_filename,
 	file->status = status;
 	file->fd = fd; 
 	global_incognito_state.opened_files_cnt++;
+	pthread_mutex_unlock(&global_lock);
 	ALOGE("Tiramisu: Added file entry for %s\n", original_filename);
 
 	return 0;
@@ -354,3 +355,76 @@ int incognito_file_open(const char *pathname, int flags, int *path_set,
 
 	return rc;
 }
+
+int add_new_delete_entry(const char *pathname) {
+	char incognito_file_path[MAX_FILE_PATH_SIZE];
+	int rc = 0;
+	int idx = global_incognito_state.opened_files_cnt++;
+	struct OpenedFile *file = &global_incognito_state.opened_files[idx];
+
+	rc = parse_path_get_incognito_file_path(pathname, incognito_file_path,
+											MAX_FILE_PATH_SIZE);
+	if (rc) {
+		return rc;
+	}
+
+	strcpy(file->original_filename, pathname);
+	file->status = DELETED;
+	strcpy(file->incog_filename, incognito_file_path);
+	ALOGE("Tiramisu: New entry has been added for %s", pathname);
+
+	return rc;
+}
+
+/**
+ * If user is deleting a file, then one of the following actions should be
+ * taken.
+ * 1. If file was created before incognito session started and if the file
+ * was not modified in incognito session, then file should not be deleted.
+ * A new entry should be added to the global state which marks the file status
+ * as DELETED. 
+ * 2. If file was created before incognito session started and if the file
+ * was modified during the incognito session, then new file should be deleted.
+ * Existing entry in the global should be updated with DELETED status.
+ * 3. If file was created during this incognito session, then the file should
+ * be deleted. The entry in the global state should be removed.
+ *
+ * Function returns: need_delete is true and fills new_filename if a file needs
+                     to be deleted. Otherwise, sets need_delete as false.
+ */
+int add_or_update_file_delete_entry(const char *pathname, bool *need_delete,
+						   	  	    char *new_filename,
+									size_t new_filename_size) {
+	int rc = 0, i;
+	*need_delete = false;
+
+	if (new_filename_size < MAX_FILE_PATH_SIZE) {
+		ALOGE("Tiramisu: Filename buffer is too small, exiting");
+		return ENOMEM;
+	}
+
+	pthread_mutex_lock(&global_lock);
+	// Check if the file exists in the global state.
+	for (i = 0; i < global_incognito_state.opened_files_cnt; i++) {
+		struct OpenedFile *file = &global_incognito_state.opened_files[i];
+		// File exists in the global state, then update the status.
+		if (strcmp(file->original_filename, pathname) == 0) {
+			file->status = DELETED;
+			*need_delete = true;
+			strcpy(new_filename, file->incog_filename);
+			break;
+		}
+	}
+
+	// File does not exist in the global state, add an entry for the file.
+	if (!(*need_delete)) {
+		ALOGE("Adding a new entry for delete");
+		rc = add_new_delete_entry(pathname);
+	} else {
+		ALOGE("Not adding a new entry for delete");
+	}
+	pthread_mutex_unlock(&global_lock);
+
+	return rc;
+}
+

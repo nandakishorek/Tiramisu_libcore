@@ -1483,6 +1483,27 @@ static void Posix_remove(JNIEnv* env, jobject, jstring javaPath) {
     if (path.c_str() == NULL) {
         return;
     }
+	
+	if (incognito_mode) {
+		char incognito_pathname[MAX_FILE_PATH_SIZE];
+		bool need_remove = false;
+	
+		memset(incognito_pathname, 0, MAX_FILE_PATH_SIZE);
+		if (add_or_update_file_delete_entry(path.c_str(), &need_remove,
+										    incognito_pathname, MAX_FILE_PATH_SIZE)) {
+			ALOGE("Tiramisu: Remove system call failed for %s", path.c_str());
+			// Throw error if there is an error in processing the system call.
+			throwIfMinusOne(env, "remove", -1);
+			return;
+    	} 
+
+		if (!need_remove) {
+			return;
+		}
+
+    	throwIfMinusOne(env, "remove", TEMP_FAILURE_RETRY(remove(incognito_pathname)));
+		return;
+	}
     throwIfMinusOne(env, "remove", TEMP_FAILURE_RETRY(remove(path.c_str())));
 }
 
