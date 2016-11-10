@@ -9,7 +9,10 @@
 #include <string.h>
 #include <errno.h>
 #include <pthread.h>
+#include <string>
+#include <map>
 
+using namespace std;
 
 struct OpenedFile {
 	char original_filename[MAX_FILE_PATH_SIZE];
@@ -18,9 +21,9 @@ struct OpenedFile {
 	int fd;
 };
 
-//XXX: TODO Make thread safe update to the data structure.
 struct IncognitoState {
-	struct OpenedFile *opened_files;	
+        struct OpenedFile *opened_files;
+	map<string, struct OpenedFile *> fileMap;
 	int opened_files_cnt;
 	int total_files_cnt;
 };
@@ -42,19 +45,22 @@ int remove_file(char *pathname) {
 }
 
 int remove_all_incognito_files() {
-	int i;
 	int rc = 0;
-	ALOGE("Tiramisu: Error : Removing all files %d", global_incognito_state.opened_files_cnt); 
-	for (i = 0; i < global_incognito_state.opened_files_cnt; i++) {
-		struct OpenedFile *file = &global_incognito_state.opened_files[i];
-		ALOGE("Tiramisu: Error: deleting file %s %d\n", file->incog_filename, file->status);
+	ALOGE("Tiramisu: Removing %d files", global_incognito_state.opened_files_cnt);
+	map<string, struct OpenedFile *>::iterator it = global_incognito_state.fileMap.begin();
+	while(it != global_incognito_state.fileMap.end()) {
+		struct OpenedFile *file = it->second;
+		++it;
 		if (file->status == DELETED) {
 			continue;
 		}
+		ALOGE("Tiramisu: Error: deleting file %s %d\n", file->incog_filename, file->status);
 		rc = remove_file(file->incog_filename);
 		if (rc) {
 			break;
 		}
+		//free(file);
+		//it->second = NULL;
 	}
 	return rc;
 }
@@ -69,9 +75,9 @@ int Incognito_io_init() {
 
 	// Allocate memory.
 	global_incognito_state.opened_files = (struct OpenedFile *)
-		calloc(MAX_FILES_PER_PROCESS, sizeof(struct OpenedFile));
+	               calloc(MAX_FILES_PER_PROCESS, sizeof(struct OpenedFile));
 	if (global_incognito_state.opened_files == NULL) {
-		return ENOMEM;
+	        return ENOMEM;
 	}
 	global_incognito_state.total_files_cnt = MAX_FILES_PER_PROCESS;
 	global_incognito_state.opened_files_cnt = 0;
@@ -86,9 +92,10 @@ void Incognito_io_stop() {
 		return;
 	}
 
-	remove_all_incognito_files();
 	free(global_incognito_state.opened_files);
 	global_incognito_state.opened_files = NULL;
+	remove_all_incognito_files();
+	global_incognito_state.fileMap.clear();
 	global_incognito_state.total_files_cnt = 0;
 	global_incognito_state.opened_files_cnt = 0;
 	incognito_mode = false;
@@ -257,25 +264,22 @@ void debug_print_flags(int flags) {
 
 bool lookup_filename(const char *pathname, char *incognito_pathname,
 					 size_t incog_pathname_sz, File_Status *status) {
-	int i;
-
 	pthread_mutex_lock(&global_lock);
-	for (i = 0; i < global_incognito_state.opened_files_cnt; i++) {
-		struct OpenedFile *file = &global_incognito_state.opened_files[i];
-		if (strcmp(file->original_filename, pathname) == 0) {
-			if (incognito_pathname && 
-				(incog_pathname_sz >= MAX_FILE_PATH_SIZE)) {
-				strcpy(incognito_pathname, file->incog_filename);
-			} else {
-				ALOGE("Tiramisu: lookup did not copy file because\n");
-			} 
-			*status = file->status;
-
-			return true;
-		}
+	map<string, struct OpenedFile *>::iterator it = global_incognito_state.fileMap.find(pathname);
+	if (it != global_incognito_state.fileMap.end()) {
+		struct OpenedFile *file = it->second;
+		if (incognito_pathname && 
+			(incog_pathname_sz >= MAX_FILE_PATH_SIZE)) {
+			strcpy(incognito_pathname, file->incog_filename);
+		} else {
+			ALOGE("Tiramisu: lookup did not copy file because\n");
+		} 
+		*status = file->status;
+		pthread_mutex_unlock(&global_lock);
+		return true;
 	}
-	pthread_mutex_unlock(&global_lock);
 
+	pthread_mutex_unlock(&global_lock);
 	return false;
 }
 
@@ -292,7 +296,8 @@ int add_file_entry(const char *original_filename, const char *new_filename,
 	strcpy(file->original_filename, original_filename);
 	strcpy(file->incog_filename, new_filename);
 	file->status = status;
-	file->fd = fd; 
+	file->fd = fd;
+	global_incognito_state.fileMap.insert(pair<string, struct OpenedFile *>(string(file->original_filename), file));
 	global_incognito_state.opened_files_cnt++;
 	pthread_mutex_unlock(&global_lock);
 	ALOGE("Tiramisu: Added file entry for %s\n", original_filename);
@@ -372,9 +377,9 @@ int incognito_file_open(const char *pathname, int flags, int *path_set,
 int add_new_delete_entry(const char *pathname) {
 	char incognito_file_path[MAX_FILE_PATH_SIZE];
 	int rc = 0;
+	global_incognito_state.opened_files_cnt++;
 	int idx = global_incognito_state.opened_files_cnt++;
 	struct OpenedFile *file = &global_incognito_state.opened_files[idx];
-
 	rc = parse_path_get_incognito_file_path(pathname, incognito_file_path,
 											MAX_FILE_PATH_SIZE);
 	if (rc) {
@@ -384,6 +389,7 @@ int add_new_delete_entry(const char *pathname) {
 	strcpy(file->original_filename, pathname);
 	file->status = DELETED;
 	strcpy(file->incog_filename, incognito_file_path);
+	global_incognito_state.fileMap.insert(pair<string, struct OpenedFile *>(string(file->incog_filename), file));
 	ALOGE("Tiramisu: New entry has been added for %s", pathname);
 
 	return rc;
@@ -408,7 +414,7 @@ int add_new_delete_entry(const char *pathname) {
 int add_or_update_file_delete_entry(const char *pathname, bool *need_delete,
 						   	  	    char *new_filename,
 									size_t new_filename_size) {
-	int rc = 0, i;
+	int rc = 0;
 	*need_delete = false;
 
 	if (new_filename_size < MAX_FILE_PATH_SIZE) {
@@ -418,15 +424,13 @@ int add_or_update_file_delete_entry(const char *pathname, bool *need_delete,
 
 	pthread_mutex_lock(&global_lock);
 	// Check if the file exists in the global state.
-	for (i = 0; i < global_incognito_state.opened_files_cnt; i++) {
-		struct OpenedFile *file = &global_incognito_state.opened_files[i];
-		// File exists in the global state, then update the status.
-		if (strcmp(file->original_filename, pathname) == 0) {
-			file->status = DELETED;
-			*need_delete = true;
-			strcpy(new_filename, file->incog_filename);
-			break;
-		}
+	// File exists in the global state, then update the status.
+	map<string, struct OpenedFile *>::iterator it = global_incognito_state.fileMap.find(pathname);
+	if (it != global_incognito_state.fileMap.end()) {
+	        struct OpenedFile *file = it->second;
+		file->status = DELETED;
+		*need_delete = true;
+		strcpy(new_filename, file->incog_filename);
 	}
 
 	// File does not exist in the global state, add an entry for the file.
@@ -442,20 +446,17 @@ int add_or_update_file_delete_entry(const char *pathname, bool *need_delete,
 }
 
 int update_file_status(const char *pathname, File_Status status) {
-	int i;
 	int rc = 1;
 
 	pthread_mutex_lock(&global_lock);
-	for (i = 0; i < global_incognito_state.opened_files_cnt; i++) {
-		struct OpenedFile *file = &global_incognito_state.opened_files[i];
+	map<string, struct OpenedFile *>::iterator it = global_incognito_state.fileMap.find(pathname);
+	if (it != global_incognito_state.fileMap.end()) {
+		struct OpenedFile *file = it->second;
 		// Update the status of the existing file entry.
-		if (strcmp(file->original_filename, pathname) == 0) {
-			ALOGE("Tiramisu: Updating the status for the file %s, current status %d, new status %d",
+		ALOGE("Tiramisu: Updating the status for the file %s, current status %d, new status %d",
 				  pathname, file->status, status);
-			file->status = status;
-			rc = 0;
-			break;
-		}
+		file->status = status;
+		rc = 0;
 	}
 	pthread_mutex_unlock(&global_lock);
 
