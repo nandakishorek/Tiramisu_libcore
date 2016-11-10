@@ -256,7 +256,7 @@ void debug_print_flags(int flags) {
 }
 
 bool lookup_filename(const char *pathname, char *incognito_pathname,
-					 size_t incog_pathname_sz) {
+					 size_t incog_pathname_sz, File_Status *status) {
 	int i;
 
 	pthread_mutex_lock(&global_lock);
@@ -269,6 +269,8 @@ bool lookup_filename(const char *pathname, char *incognito_pathname,
 			} else {
 				ALOGE("Tiramisu: lookup did not copy file because\n");
 			} 
+			*status = file->status;
+
 			return true;
 		}
 	}
@@ -300,7 +302,7 @@ int add_file_entry(const char *original_filename, const char *new_filename,
 
 int incognito_file_open(const char *pathname, int flags, int *path_set,
 						char *incognito_file_path, int incog_pathname_sz,
-						int *add_entry) {
+						int *add_entry, int *update_entry) {
 	// Make a copy of the original file only the file is being opened in
 	// append mode
 	// 1. If the file is being created in incognito mode,
@@ -308,15 +310,18 @@ int incognito_file_open(const char *pathname, int flags, int *path_set,
 
 	*path_set = 0;
 	*add_entry = 0;
+	*update_entry = 0;
 
-	if(incog_pathname_sz < MAX_FILE_PATH_SIZE) {
+	if (incog_pathname_sz < MAX_FILE_PATH_SIZE) {
 		return ENOMEM;
 	} 
 
 	// If it's not write operation, return.
 	if (!((flags & O_WRONLY) || (flags & O_RDWR))) {
 		// Search incognito files and return if files 
-		*path_set = lookup_filename(pathname, incognito_file_path, incog_pathname_sz);
+		File_Status status;
+		*path_set = lookup_filename(pathname, incognito_file_path,
+									incog_pathname_sz, &status);
 		return 0;
 	}
 
@@ -336,8 +341,16 @@ int incognito_file_open(const char *pathname, int flags, int *path_set,
 	if (!((flags & O_APPEND) || (flags & O_TRUNC))) return 0;
 
 
+	File_Status status;
 	// If the file is already there in incognito list, then return.
-	if (lookup_filename(pathname, NULL, 0)) return 0;
+	if (lookup_filename(pathname, NULL, 0, &status)) {
+		// If the file is deleted, then a new entry should be added. 
+		if (status == DELETED) {
+			*update_entry = 1;
+		};
+
+		return 0;
+	}
 
 	struct stat file_stat;
     if ((flags & O_TRUNC) && (stat(pathname, &file_stat) != 0)) {
@@ -422,6 +435,27 @@ int add_or_update_file_delete_entry(const char *pathname, bool *need_delete,
 		rc = add_new_delete_entry(pathname);
 	} else {
 		ALOGE("Not adding a new entry for delete");
+	}
+	pthread_mutex_unlock(&global_lock);
+
+	return rc;
+}
+
+int update_file_status(const char *pathname, File_Status status) {
+	int i;
+	int rc = 1;
+
+	pthread_mutex_lock(&global_lock);
+	for (i = 0; i < global_incognito_state.opened_files_cnt; i++) {
+		struct OpenedFile *file = &global_incognito_state.opened_files[i];
+		// Update the status of the existing file entry.
+		if (strcmp(file->original_filename, pathname) == 0) {
+			ALOGE("Tiramisu: Updating the status for the file %s, current status %d, new status %d",
+				  pathname, file->status, status);
+			file->status = status;
+			rc = 0;
+			break;
+		}
 	}
 	pthread_mutex_unlock(&global_lock);
 

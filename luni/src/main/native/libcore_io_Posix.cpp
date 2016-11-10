@@ -672,10 +672,11 @@ static void Posix_chmod(JNIEnv* env, jobject, jstring javaPath, jint mode) {
     }
 
 	char incognito_file_path[4096];
+	File_Status status;
 	ALOGE("Posix_chmod: %s", path.c_str());
 	memset(incognito_file_path, 0, 4096);
 	if(incognito_mode && 
-		lookup_filename(path.c_str(), incognito_file_path, 4096)) {
+		lookup_filename(path.c_str(), incognito_file_path, 4096, &status)) {
     	throwIfMinusOne(env, "chmod", TEMP_FAILURE_RETRY(chmod(incognito_file_path, mode)));
 		return;
 	}
@@ -688,11 +689,13 @@ static void Posix_chown(JNIEnv* env, jobject, jstring javaPath, jint uid, jint g
     if (path.c_str() == NULL) {
         return;
     }
+
 	char incognito_file_path[4096];
+	File_Status status;
 	ALOGE("Posix_chmod: %s", path.c_str());
 	memset(incognito_file_path, 0, 4096);
 	if(incognito_mode && 
-		lookup_filename(path.c_str(), incognito_file_path, 4096)) {
+		lookup_filename(path.c_str(), incognito_file_path, 4096, &status)) {
     	throwIfMinusOne(env, "chown", TEMP_FAILURE_RETRY(chown(incognito_file_path, uid, gid)));
 		return;
 	}
@@ -1264,14 +1267,20 @@ static jobject Posix_open(JNIEnv* env, jobject, jstring javaPath, jint flags, ji
 		char incognito_file_path[4096];
 		int path_set = 0;
 		int add_entry = 0;
+		int update_entry = 0;
 
 		ALOGE("Posix_open: %s flags=0x%x mode=0x%x", path.c_str(), flags, mode);
 		memset(incognito_file_path, 0, 4096);
-		incognito_file_open(path.c_str(), flags, &path_set, incognito_file_path, 4096, &add_entry);
+		incognito_file_open(path.c_str(), flags, &path_set, incognito_file_path,
+						 	MAX_FILE_PATH_SIZE, &add_entry, &update_entry);
 		if (path_set) {
     		int fd = throwIfMinusOne(env, "open", TEMP_FAILURE_RETRY(open(incognito_file_path, flags, mode)));
 			if (add_entry) {
 				add_file_entry(path.c_str(), incognito_file_path, VALID, fd);
+			} else if (update_entry) {
+				// If the old was file deleted, then an entry in the global state exists.
+				// This open is to create a new file, so mark the existing file status as VALID.
+				update_file_status(path.c_str(), VALID /* file status */);
 			}
     		return fd != -1 ? jniCreateFileDescriptor(env, fd) : NULL;
 		}
