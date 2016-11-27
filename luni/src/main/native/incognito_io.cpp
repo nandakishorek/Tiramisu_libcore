@@ -37,7 +37,7 @@ int remove_file(char *pathname) {
 
 	rc = remove(pathname);
 	if (rc) {
-		ALOGE("Tiramisu: Error: could not delete the file: errno=%d, %s", errno, pathname);
+		ALOGE("Tiramisu: Error: could not delete the file: errno=%d", errno);
 		return errno;
 	}
 
@@ -54,7 +54,7 @@ int remove_all_incognito_files() {
 		if (file->status == DELETED) {
 			continue;
 		}
-		ALOGE("Tiramisu: deleting file %s %d\n", file->incog_filename, file->status);
+		ALOGE("Tiramisu: Error: deleting file %s %d\n", file->incog_filename, file->status);
 		rc = remove_file(file->incog_filename);
 		if (rc) {
 			break;
@@ -92,9 +92,9 @@ void Incognito_io_stop() {
 		return;
 	}
 
-	remove_all_incognito_files();
 	free(global_incognito_state.opened_files);
 	global_incognito_state.opened_files = NULL;
+	remove_all_incognito_files();
 	global_incognito_state.fileMap.clear();
 	global_incognito_state.total_files_cnt = 0;
 	global_incognito_state.opened_files_cnt = 0;
@@ -271,7 +271,6 @@ bool lookup_filename(const char *pathname, char *incognito_pathname,
 		if (incognito_pathname && 
 			(incog_pathname_sz >= MAX_FILE_PATH_SIZE)) {
 			strcpy(incognito_pathname, file->incog_filename);
-			ALOGD("Tiramisu: lookup %s", file->incog_filename);
 		} else {
 			ALOGE("Tiramisu: lookup did not copy file because\n");
 		} 
@@ -301,7 +300,7 @@ int add_file_entry(const char *original_filename, const char *new_filename,
 	global_incognito_state.fileMap.insert(pair<string, struct OpenedFile *>(string(file->original_filename), file));
 	global_incognito_state.opened_files_cnt++;
 	pthread_mutex_unlock(&global_lock);
-	ALOGE("Tiramisu: Added file entry for %s\n", file->original_filename);
+	ALOGE("Tiramisu: Added file entry for %s\n", original_filename);
 
 	return 0;
 }
@@ -378,6 +377,7 @@ int incognito_file_open(const char *pathname, int flags, int *path_set,
 int add_new_delete_entry(const char *pathname) {
 	char incognito_file_path[MAX_FILE_PATH_SIZE];
 	int rc = 0;
+	global_incognito_state.opened_files_cnt++;
 	int idx = global_incognito_state.opened_files_cnt++;
 	struct OpenedFile *file = &global_incognito_state.opened_files[idx];
 	rc = parse_path_get_incognito_file_path(pathname, incognito_file_path,
