@@ -557,12 +557,29 @@ static bool javaSocketAddressToSockaddr(
 
 static jobject doStat(JNIEnv* env, jstring javaPath, bool isLstat) {
     ScopedUtfChars path(env, javaPath);
+	char incognito_file_path[MAX_FILE_PATH_SIZE];
+	File_Status status;
+
+	ALOGE("Posix_chmod: %s", path.c_str());
+	memset(incognito_file_path, 0, MAX_FILE_PATH_SIZE);
+
     if (path.c_str() == NULL) {
         return NULL;
     }
+
+	char filepath[MAX_FILE_PATH_SIZE];
+
+	if (incognito_mode &&
+		lookup_filename(path.c_str(), incognito_file_path,
+						MAX_FILE_PATH_SIZE, &status)) {
+		strcpy(filepath, incognito_file_path);
+	} else {
+		strcpy(filepath, path.c_str());
+	}
+	
     struct stat sb;
-    int rc = isLstat ? TEMP_FAILURE_RETRY(lstat(path.c_str(), &sb))
-                     : TEMP_FAILURE_RETRY(stat(path.c_str(), &sb));
+    int rc = isLstat ? TEMP_FAILURE_RETRY(lstat(filepath, &sb))
+                     : TEMP_FAILURE_RETRY(stat(filepath, &sb));
     if (rc == -1) {
         throwErrnoException(env, isLstat ? "lstat" : "stat");
         return NULL;

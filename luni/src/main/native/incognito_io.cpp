@@ -18,10 +18,16 @@ struct OpenedFile {
 	int fd;
 };
 
+struct DirectoryInfo {
+	char path[MAX_FILE_PATH_SIZE];
+};
+
 //XXX: TODO Make thread safe update to the data structure.
 struct IncognitoState {
 	struct OpenedFile *opened_files;	
+	struct DirectoryInfo *opened_dirs;
 	int opened_files_cnt;
+	int opened_dirs_cnt;
 	int total_files_cnt;
 };
 
@@ -59,6 +65,17 @@ int remove_all_incognito_files() {
 	return rc;
 }
 
+void remove_all_directory() {
+	int i;
+
+	for (i = global_incognito_state.opened_dirs_cnt - 1; i >= 0; i--) {
+		struct DirectoryInfo *dir = &global_incognito_state.opened_dirs[i];
+		if (dir->path[0] != '\0' && remove(dir->path)) {
+			ALOGE("Tiramisu: Could not remove directory %s", dir->path);
+		}
+	}
+}
+
 int Incognito_io_init() {
     // Check if the global incognito state is already inited for the process.
     // If the state is inited, return.
@@ -73,8 +90,14 @@ int Incognito_io_init() {
 	if (global_incognito_state.opened_files == NULL) {
 		return ENOMEM;
 	}
+	global_incognito_state.opened_dirs = (struct DirectoryInfo *)
+		calloc(MAX_FILES_PER_PROCESS, sizeof(struct DirectoryInfo));
+	if (global_incognito_state.opened_dirs == NULL) {
+		return ENOMEM;
+	}
 	global_incognito_state.total_files_cnt = MAX_FILES_PER_PROCESS;
 	global_incognito_state.opened_files_cnt = 0;
+	global_incognito_state.opened_dirs_cnt = 0;
 	incognito_mode = true;
 	ALOGE("Tiramisu: Incognito state init successful");
     return 0;
@@ -87,6 +110,7 @@ void Incognito_io_stop() {
 	}
 
 	remove_all_incognito_files();
+	remove_all_directory();
 	free(global_incognito_state.opened_files);
 	global_incognito_state.opened_files = NULL;
 	global_incognito_state.total_files_cnt = 0;
@@ -271,6 +295,7 @@ bool lookup_filename(const char *pathname, char *incognito_pathname,
 			} 
 			*status = file->status;
 
+			pthread_mutex_unlock(&global_lock);
 			return true;
 		}
 	}
@@ -369,7 +394,7 @@ int incognito_file_open(const char *pathname, int flags, int *path_set,
 	return rc;
 }
 
-int add_new_delete_entry(const char *pathname) {
+int add_new_file_delete_entry(const char *pathname) {
 	char incognito_file_path[MAX_FILE_PATH_SIZE];
 	int rc = 0;
 	int idx = global_incognito_state.opened_files_cnt++;
@@ -387,6 +412,35 @@ int add_new_delete_entry(const char *pathname) {
 	ALOGE("Tiramisu: New entry has been added for %s", pathname);
 
 	return rc;
+}
+
+bool lookup_directory(const char *pathname) {
+	int i;
+
+	for (i = global_incognito_state.opened_dirs_cnt - 1; i >= 0; i--) {
+		struct DirectoryInfo *dir = &global_incognito_state.opened_dirs[i];
+		if (dir->path[0] != '\0' &&
+					strcmp(pathname, dir->path) == 0) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+void delete_directory_entry(const char *pathname) {
+	int i;
+
+	for (i = 0; i < global_incognito_state.opened_dirs_cnt; i++) {
+		struct DirectoryInfo *dir = &global_incognito_state.opened_dirs[i];
+
+		if (strcmp(dir->path, pathname) == 0) {
+			dir->path[0] = '\0';	
+			ALOGE("Tiramisu: Deleting the entry %s", pathname);
+			break;
+		}
+	}
+	return;
 }
 
 /**
@@ -432,7 +486,10 @@ int add_or_update_file_delete_entry(const char *pathname, bool *need_delete,
 	// File does not exist in the global state, add an entry for the file.
 	if (!(*need_delete)) {
 		ALOGE("Adding a new entry for delete");
-		rc = add_new_delete_entry(pathname);
+		rc = add_new_file_delete_entry(pathname);
+	} else if (lookup_directory(pathname)) {
+		*need_delete = true;
+		delete_directory_entry(pathname);
 	} else {
 		ALOGE("Not adding a new entry for delete");
 	}
@@ -462,3 +519,9 @@ int update_file_status(const char *pathname, File_Status status) {
 	return rc;
 }
 
+void add_directory_entry(const char *pathname) {
+	int idx = global_incognito_state.opened_dirs_cnt++;
+	struct DirectoryInfo *dir = &global_incognito_state.opened_dirs[idx];
+
+	strcpy(dir->path, pathname);
+}
