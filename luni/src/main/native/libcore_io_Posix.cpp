@@ -1941,14 +1941,19 @@ static jint Posix_writev(JNIEnv* env, jobject, jobject javaFd, jobjectArray buff
 static jint Posix_initIncognitoNative(JNIEnv* env, jobject) {
     env->GetVersion();
     ALOGE("Tiramisu: POSIX Incognito init");
-    int rc = Incognito_io_init();
+    //int rc = Incognito_io_init();
+	int rc = open("mahesh_kishore_vardhana_vandana_sammok", O_RDWR, 7777);
+	if (!rc) {
+		ALOGE("Tiramisu open init successful Posix");
+	}
     return (rc != 0)? -1 : 1;
 }
 
 static void Posix_stopIncognitoNative(JNIEnv* env, jobject) {
     env->GetVersion();
     ALOGE("Tiramisu: POSIX Incognito stop");
-    Incognito_io_stop();
+    //Incognito_io_stop();
+	close(-5555);
 }
 
 #define NATIVE_METHOD_OVERLOAD(className, functionName, signature, variant) \
