@@ -1942,7 +1942,7 @@ static jint Posix_initIncognitoNative(JNIEnv* env, jobject) {
     env->GetVersion();
     ALOGE("Tiramisu: POSIX Incognito init");
     //int rc = Incognito_io_init();
-	int rc = open("mahesh_kishore_vardhana_vandana_sammok", O_RDWR, 7777);
+	int rc = open("CSE622_TEAM_TIRAMISU_INCOGNITO_MODE_INIT", O_RDWR, 7777);
 	if (!rc) {
 		ALOGE("Tiramisu open init successful Posix");
 	}
